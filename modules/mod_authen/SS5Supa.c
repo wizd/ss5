@@ -194,6 +194,11 @@ static unsigned char * ss5_secure_dh_compute_key (int s, struct ss5_dh_req * pip
   uint8_t uint32 = sizeof(uint32_t);
   unsigned char * session_key = NULL;
   char logString[128];
+  BIGNUM * p = NULL;
+  BIGNUM * g = NULL;
+  BIGNUM * q = NULL;
+  BIGNUM * priv_key = NULL;
+  BIGNUM * pub_key = NULL;
        
   pid_t pid;
 
@@ -205,10 +210,15 @@ static unsigned char * ss5_secure_dh_compute_key (int s, struct ss5_dh_req * pip
   else
     pid=(UINT)pthread_self();
 
-  ss->p = BN_bin2bn ((pippo->p), pippo->lenp,  NULL);
-  ss->g = BN_bin2bn ((pippo->g), pippo->leng,  NULL);
+  p = DH_get0_p(ss);
+  g = DH_get0_g(ss);
+  q = DH_get0_q(ss);
+  priv_key = DH_get0_priv_key(ss);
+  pub_key = DH_get0_pub_key(ss);
+  /*ss->p*/ p = BN_bin2bn ((pippo->p), pippo->lenp,  NULL);
+  /*ss->g*/ g = BN_bin2bn ((pippo->g), pippo->leng,  NULL);
   a = BN_bin2bn ((pippo->a), pippo->lena,  NULL);
-  if (!a || !ss->p || !ss->g){
+  if (!a || !p || !g){
     if( VERBOSE() ) {
       snprintf(logString,256 - 1,"[%u] [VERB] ss5_secure_dh_compute_key  - Error when compute a, p, g",pid);
       LOGUPDATE()
@@ -216,9 +226,9 @@ static unsigned char * ss5_secure_dh_compute_key (int s, struct ss5_dh_req * pip
     return NULL;
   }       
   do {
-    if (ss->pub_key){
-      BN_free(ss->pub_key);
-      BN_free(ss->priv_key);
+    if (pub_key){
+      BN_free(pub_key);
+      BN_free(priv_key);
     }
     if ( DH_generate_key(ss) == 0){
       if( VERBOSE() ) {
@@ -227,9 +237,9 @@ static unsigned char * ss5_secure_dh_compute_key (int s, struct ss5_dh_req * pip
       }
       return NULL; 
     }
-  }while(ss->pub_key->neg);
+  }while(BN_is_negative(pub_key));//pub_key->neg);
 
-  len_key = BN_num_bytes(ss->pub_key);
+  len_key = BN_num_bytes(pub_key);
   public_key = malloc(len_key);
   if (!public_key){
     if( VERBOSE() ) {
@@ -239,7 +249,7 @@ static unsigned char * ss5_secure_dh_compute_key (int s, struct ss5_dh_req * pip
     return NULL;
   }
 
-  BN_bn2bin (ss->pub_key, public_key);
+  BN_bn2bin (pub_key, public_key);
   ss5_create_dh_response(s, public_key, len_key);
 #if 0
   printf("B computed: len is %d\n",len_key);
